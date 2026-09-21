@@ -1,0 +1,7 @@
+; 脚本验证工作区。没有正式游戏主场景；请把 scripts/scenes 接入自己的项目。
+config_version=5
+[application]
+config/name="Church Game - Script Baseline"
+[rendering]
+renderer/rendering_method="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
