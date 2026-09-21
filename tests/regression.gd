@@ -110,31 +110,50 @@ func _run() -> void:
 	player.climb_horizontal_speed = 42.0
 	player._update_climb(1.0 / 60.0)
 	check(is_equal_approx(player.velocity.x, 42.0), "横移速度可调")
-	for step in range(ceili(2.0 / maxf(player.get_process_delta_time(), 0.001))):
-		player._update_climb(player.get_process_delta_time())
-	check(absf(player.climb_grip.global_position.x - 16.0) < 0.01, "右移止于允许距离")
-	check(not player.animator.is_playing(), "只横移时保持首帧")
 	Input.action_release("right")
 	var held_x := player.global_position.x
 	player._update_climb(1.0 / 60.0)
-	check(is_equal_approx(player.global_position.x, held_x), "松键悬停不强制回中")
+	check(is_equal_approx(player.global_position.x, held_x), "范围内松键悬停不强制回中")
+	check(player.animator.frame == 0 and not player.animator.is_playing(), "范围内只横移保持首帧")
+	Input.action_press("right")
+	for step in range(ceili(2.0 / maxf(player.get_process_delta_time(), 0.001))):
+		player._update_climb(player.get_process_delta_time())
+		if player.state != GamePlayer.State.CLIMB:
+			break
+	check(player.climb_grip.global_position.x > 16.0 and player.state == GamePlayer.State.NORMAL, "右移越界自动松手")
+	check(player.airborne and player.animator.animation == &"jump" and player.animator.frame == 1 and not player.animator.is_playing(), "横移脱离使用jump末帧")
+	check(player.velocity.y == 0.0 and player.velocity.x > 0.0, "横移松手不施加起跳冲量")
+	Input.action_release("right")
+	player.position = Vector2(0, 180)
+	player.force_update_transform()
+	player._regrab_remaining = 0.0
+	await physics_frame
+	await physics_frame
+	await process_frame
+	check(player._try_grab_chain(), "复位后重新抓链")
 	Input.action_press("left")
 	for step in range(ceili(2.0 / maxf(player.get_process_delta_time(), 0.001))):
 		player._update_climb(player.get_process_delta_time())
-	check(absf(player.climb_grip.global_position.x + 16.0) < 0.01, "左移止于允许距离: " + str(player.climb_grip.global_position.x))
+		if player.state != GamePlayer.State.CLIMB:
+			break
+	check(player.climb_grip.global_position.x < -16.0 and player.state == GamePlayer.State.NORMAL, "左移越界自动松手")
 	Input.action_release("left")
+	player._regrab_remaining = 0.0
+	check(player._try_grab_chain(), "左侧脱离后重新抓链")
 	player.climb_speed = 120.0
 	Input.action_press("climb_down")
 	player._update_climb(1.0 / 60.0)
 	check(is_equal_approx(player.velocity.y, 120.0), "上下速度可调")
 	Input.action_release("climb_down")
 	# 两端余量内可以抓住，且松键不会突然被拉回可见锁链端点。
-	for hand_y in [-20.0, 650.0]:
+	for hand_y in [-50.0, -20.0, 650.0, 680.0]:
 		player.state = GamePlayer.State.NORMAL
 		player.position = Vector2(0, hand_y + 35.0)
+		player.force_update_transform()
 		await physics_frame
 		await physics_frame
-		check(player._try_grab_chain(), "余量内可以抓住")
+		await physics_frame
+		check(player._try_grab_chain(), "身体相交即可抓住，包含手部超出范围")
 		var held_y := player.position.y
 		player._update_climb(1.0 / 60.0)
 		check(is_equal_approx(player.position.y, held_y), "余量内保持悬停")
