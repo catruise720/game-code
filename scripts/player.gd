@@ -16,7 +16,7 @@ signal high_fall_finished
 @export_range(0, 500, 1) var climb_speed: float = 90.0
 ## 左右横移速度（像素/秒）。
 @export_range(0, 300, 1) var climb_horizontal_speed: float = 35.0
-## 手部相对锁链中心向左、向右各自允许的距离（像素）。
+## 手部相对锁链中心左右各自的脱离距离（像素）；超过后松手下落。
 @export_range(0, 80, 1) var climb_horizontal_limit: float = 16.0
 @export var regrab_delay: float = 0.15
 
@@ -182,9 +182,7 @@ func _try_grab_chain() -> bool:
 		var chain := node as ClimbChain
 		if chain == null or not chain.overlaps_body(self):
 			continue
-		var hand_y := climb_grip.global_position.y
-		if hand_y < chain.grab_top_y() or hand_y > chain.grab_bottom_y():
-			continue
+		# 以身体碰撞体与Area2D相交为准，不再额外用手部高度拒绝抓取。
 		var offset_x := chain.global_position.x - climb_grip.global_position.x
 		if test_move(global_transform, Vector2(offset_x, 0.0)):
 			continue
@@ -220,23 +218,24 @@ func _update_climb(delta: float) -> void:
 	var direction_y := Input.get_axis("climb_up", "climb_down")
 	var direction_x := Input.get_axis("left", "right")
 	var hand_position := climb_grip.global_position
-	var target_y := clampf(
-		hand_position.y + direction_y * climb_speed * delta,
-		current_chain.grab_top_y(), current_chain.grab_bottom_y()
-	)
-	# 抓取余量也作为悬停/攀爬边界，不会抓住后突然被拉回图像端点。
+	var vertical_motion := direction_y * climb_speed * delta
+	# 身体刚碰到范围时，手部可能仍在端点外。只限制继续向外移动，
+	# 允许向范围内攀爬；无输入时不瞬移到端点。
+	if vertical_motion < 0.0:
+		vertical_motion = maxf(vertical_motion, minf(0.0, current_chain.grab_top_y() - hand_position.y))
+	elif vertical_motion > 0.0:
+		vertical_motion = minf(vertical_motion, maxf(0.0, current_chain.grab_bottom_y() - hand_position.y))
 	var horizontal_limit := minf(climb_horizontal_limit, current_chain.detection_width / 2.0)
-	var target_x := clampf(
-		hand_position.x + direction_x * climb_horizontal_speed * delta,
-		current_chain.global_position.x - horizontal_limit,
-		current_chain.global_position.x + horizontal_limit
-	)
 	velocity = Vector2(
-		(target_x - hand_position.x) / delta,
-		(target_y - hand_position.y) / delta
+		direction_x * climb_horizontal_speed,
+		vertical_motion / delta
 	)
 	var previous_y := global_position.y
 	move_and_slide() # 此分支不施加重力
+	# 检查碰撞处理后的实际位置，撞墙而没有移出去时不会松手。
+	if absf(climb_grip.global_position.x - current_chain.global_position.x) > horizontal_limit:
+		_release_to_fall(true)
+		return
 	if direction_y != 0.0 and absf(global_position.y - previous_y) > 0.01:
 		animator.play("climb")
 	else:
@@ -248,10 +247,11 @@ func _update_climb(delta: float) -> void:
 		airborne = false
 		_play_ground_animation()
 
-func _release_to_fall() -> void:
+func _release_to_fall(keep_horizontal_velocity: bool = false) -> void:
 	current_chain = null
 	state = State.NORMAL
-	velocity = Vector2.ZERO
+	velocity = Vector2(velocity.x if keep_horizontal_velocity else 0.0, 0.0)
+	_regrab_remaining = regrab_delay
 	airborne = true
 	highest_y = global_position.y
 	_hold_last(&"jump")
