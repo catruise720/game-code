@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/prayer_statue.gd" id="1"]
+[sub_resource type="RectangleShape2D" id="PrayerRange"]
+size = Vector2(180, 180)
+
+[node name="PrayerStatue" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -90)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -90)
+shape = SubResource("PrayerRange")
