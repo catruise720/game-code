@@ -59,7 +59,10 @@ func _run() -> void:
 	check(bottom.position.x == bottom_x, "长度变化不能移动配重X")
 	check(bottom.position.y == 604, "配重Y跟随长度")
 	var shape := (chain.get_node("CollisionShape2D") as CollisionShape2D).shape as RectangleShape2D
-	check(shape.size.y == 608, "检测高度跟随长度")
+	check(shape.size.y == 698, "检测高度包含上下余量")
+	var sensor := chain.get_node("CollisionShape2D") as CollisionShape2D
+	check(sensor.position.y - shape.size.y / 2.0 == -30, "检测上边界包含上余量")
+	check(sensor.position.y + shape.size.y / 2.0 == 668, "检测下边界包含下余量")
 	var second := chain_scene.instantiate() as ClimbChain
 	second.position.x = 1000
 	root.add_child(second)
@@ -103,6 +106,38 @@ func _run() -> void:
 	Input.action_release("climb_up")
 	player._update_climb(1.0 / 60.0)
 	check(player.animator.frame == 0 and not player.animator.is_playing(), "松键回第一帧")
+	Input.action_press("right")
+	player.climb_horizontal_speed = 42.0
+	player._update_climb(1.0 / 60.0)
+	check(is_equal_approx(player.velocity.x, 42.0), "横移速度可调")
+	for step in range(ceili(2.0 / maxf(player.get_process_delta_time(), 0.001))):
+		player._update_climb(player.get_process_delta_time())
+	check(absf(player.climb_grip.global_position.x - 16.0) < 0.01, "右移止于允许距离")
+	check(not player.animator.is_playing(), "只横移时保持首帧")
+	Input.action_release("right")
+	var held_x := player.global_position.x
+	player._update_climb(1.0 / 60.0)
+	check(is_equal_approx(player.global_position.x, held_x), "松键悬停不强制回中")
+	Input.action_press("left")
+	for step in range(ceili(2.0 / maxf(player.get_process_delta_time(), 0.001))):
+		player._update_climb(player.get_process_delta_time())
+	check(absf(player.climb_grip.global_position.x + 16.0) < 0.01, "左移止于允许距离: " + str(player.climb_grip.global_position.x))
+	Input.action_release("left")
+	player.climb_speed = 120.0
+	Input.action_press("climb_down")
+	player._update_climb(1.0 / 60.0)
+	check(is_equal_approx(player.velocity.y, 120.0), "上下速度可调")
+	Input.action_release("climb_down")
+	# 两端余量内可以抓住，且松键不会突然被拉回可见锁链端点。
+	for hand_y in [-20.0, 650.0]:
+		player.state = GamePlayer.State.NORMAL
+		player.position = Vector2(0, hand_y + 35.0)
+		await physics_frame
+		await physics_frame
+		check(player._try_grab_chain(), "余量内可以抓住")
+		var held_y := player.position.y
+		player._update_climb(1.0 / 60.0)
+		check(is_equal_approx(player.position.y, held_y), "余量内保持悬停")
 	await process_frame
 	key(KEY_X, true)
 	player._physics_process(1.0 / 60.0)
@@ -124,8 +159,12 @@ func _run() -> void:
 	statue.position = Vector2(0, 260)
 	root.add_child(statue)
 	player.position = Vector2(0, 180)
+	player.force_update_transform()
+	statue.force_update_transform()
 	await physics_frame
 	await physics_frame
+	await physics_frame
+	await process_frame
 	statue.prayer_completed.connect(func(_who): prayer_events += 1)
 	player._try_prayer()
 	check(player.state == GamePlayer.State.KNEELING_DOWN, "雕像范围允许祈祷")
