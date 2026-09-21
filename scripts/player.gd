@@ -33,41 +33,40 @@ var highest_y: float = 0.0
 var _regrab_remaining: float = 0.0
 
 func _ready() -> void:
+	_ensure_default_input_map()
+
 	if animator == null:
 		animator = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
-	if animator == null or animator.sprite_frames == null or climb_grip == null:
-		push_error("Player 需要 AnimatedSprite2D、SpriteFrames 和 ClimbGrip。")
+	if animator == null or animator.sprite_frames == null:
+		push_error("请在玩家检查器的 Animator 中指定带 SpriteFrames 的 AnimatedSprite2D。")
 		set_physics_process(false)
 		return
+	if climb_grip == null:
+		push_warning("缺少 ClimbGrip：暂不可抓链，普通移动和跳跃仍然可用。")
 	for animation_name in ["idle", "walk", "run", "jump", "climb", "kneel_down", "stand_up", "fall lower", "fall higher"]:
-		if not animator.sprite_frames.has_animation(animation_name):
-			push_error("缺少人物动画：" + animation_name)
-			set_physics_process(false)
-			return
-		if animator.sprite_frames.get_frame_count(animation_name) == 0:
-			push_error("人物动画没有帧：" + animation_name)
-			set_physics_process(false)
-			return
-	for action in ["left", "right", "run", "jump", "pray", "climb_grab", "climb_up", "climb_down"]:
-		if not InputMap.has_action(action):
-			push_error("输入映射缺少：" + action)
-			set_physics_process(false)
-			return
+		if not _has_animation(animation_name):
+			push_warning("人物动画缺失或无帧：" + animation_name + "；请补全，普通移动不会被停用。")
 	for animation_name in ["jump", "kneel_down", "stand_up", "fall lower", "fall higher"]:
-		animator.sprite_frames.set_animation_loop(animation_name, false)
+		if _has_animation(animation_name):
+			animator.sprite_frames.set_animation_loop(animation_name, false)
 	for animation_name in ["idle", "walk", "run", "climb"]:
-		animator.sprite_frames.set_animation_loop(animation_name, true)
+		if _has_animation(animation_name):
+			animator.sprite_frames.set_animation_loop(animation_name, true)
 	if not animator.animation_finished.is_connected(_on_animation_finished):
 		animator.animation_finished.connect(_on_animation_finished)
 	highest_y = global_position.y
-	animator.play("idle")
+	_play_ground_animation()
 
 func _physics_process(delta: float) -> void:
+	if Input.is_action_just_pressed("fullscreen"):
+		_toggle_fullscreen()
+
 	_regrab_remaining = maxf(0.0, _regrab_remaining - delta)
 	if state == State.NORMAL:
 		if Input.is_action_just_pressed("pray") and is_on_floor():
 			_try_prayer()
-		if state == State.NORMAL and Input.is_action_just_pressed("climb_grab"):
+		# X 共用：附近有锁链时优先抓链；抓不到才由普通移动处理为跳跃。
+		if state == State.NORMAL and Input.is_action_just_pressed("jump"):
 			if _try_grab_chain():
 				return # 抓住当帧先显示 climb 第一帧
 	elif state == State.KNEELING and Input.is_action_just_pressed("pray"):
@@ -106,11 +105,15 @@ func _update_normal(delta: float) -> void:
 		var distance := maxf(0.0, global_position.y - highest_y)
 		airborne = false
 		if distance >= maxf(lower_fall_height, higher_fall_height):
-			state = State.LANDING_HIGHER
 			velocity.x = 0.0
-			animator.play("fall higher")
+			if _has_animation(&"fall higher"):
+				state = State.LANDING_HIGHER
+				animator.play("fall higher")
+			else:
+				state = State.FAINTED
+				high_fall_finished.emit()
 			return
-		if distance >= lower_fall_height:
+		if distance >= lower_fall_height and _has_animation(&"fall lower"):
 			state = State.LANDING_LOWER
 			velocity.x = 0.0
 			animator.play("fall lower")
@@ -120,17 +123,53 @@ func _update_normal(delta: float) -> void:
 func _horizontal_speed() -> float:
 	return run_speed if Input.is_action_pressed("run") else walk_speed
 
+
+func _ensure_default_input_map() -> void:
+	# 在运行时统一这八个动作的键盘绑定，防止旧Z抓链与Z祈祷冲突。
+	# 保留手柄等非键盘绑定；不改写磁盘上的项目设置。
+	_ensure_key_action(&"left", KEY_LEFT)
+	_ensure_key_action(&"right", KEY_RIGHT)
+	_ensure_key_action(&"jump", KEY_X)
+	_ensure_key_action(&"pray", KEY_Z)
+	_ensure_key_action(&"run", KEY_SHIFT)
+	_ensure_key_action(&"climb_up", KEY_UP)
+	_ensure_key_action(&"climb_down", KEY_DOWN)
+	_ensure_key_action(&"fullscreen", KEY_V)
+
+
+func _ensure_key_action(action_name: StringName, keycode: Key) -> void:
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name)
+
+	for existing_event in InputMap.action_get_events(action_name):
+		if existing_event is InputEventKey:
+			InputMap.action_erase_event(action_name, existing_event)
+
+	var key_event := InputEventKey.new()
+	key_event.physical_keycode = keycode
+	InputMap.action_add_event(action_name, key_event)
+
+
+func _toggle_fullscreen() -> void:
+	var mode := DisplayServer.window_get_mode()
+	if mode == DisplayServer.WINDOW_MODE_FULLSCREEN \
+		or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
 func _begin_jump() -> void:
 	state = State.NORMAL
 	current_chain = null
 	velocity.y = jump_force
 	airborne = true
 	highest_y = global_position.y
-	animator.play("jump")
-	animator.set_frame_and_progress(0, 0.0)
+	if _has_animation(&"jump"):
+		animator.play("jump")
+		animator.set_frame_and_progress(0, 0.0)
 
 func _try_grab_chain() -> bool:
-	if _regrab_remaining > 0.0:
+	if _regrab_remaining > 0.0 or climb_grip == null or not _has_animation(&"climb"):
 		return false
 	var candidate: ClimbChain = null
 	var nearest_distance := INF
@@ -199,6 +238,8 @@ func _release_to_fall() -> void:
 	_hold_last(&"jump")
 
 func _try_prayer() -> void:
+	if not _has_animation(&"kneel_down") or not _has_animation(&"stand_up"):
+		return
 	var nearest_distance := INF
 	var candidate: Area2D = null
 	for node in get_tree().get_nodes_in_group("prayer_spot"):
@@ -227,20 +268,32 @@ func _end_prayer() -> void:
 		(previous_statue as PrayerStatue).end_prayer(self)
 
 func _hold_frame(animation_name: StringName, frame_index: int) -> void:
+	if not _has_animation(animation_name):
+		return
 	animator.animation = animation_name
 	animator.pause()
 	animator.set_frame_and_progress(frame_index, 0.0)
 
 func _hold_last(animation_name: StringName) -> void:
+	if not _has_animation(animation_name):
+		return
 	_hold_frame(animation_name, animator.sprite_frames.get_frame_count(animation_name) - 1)
 
 func _play_ground_animation() -> void:
+	var desired: StringName = &"idle"
 	if Input.get_axis("left", "right") == 0.0:
-		animator.play("idle")
+		desired = &"idle"
 	elif Input.is_action_pressed("run"):
-		animator.play("run")
+		desired = &"run"
 	else:
-		animator.play("walk")
+		desired = &"walk"
+	if _has_animation(desired):
+		animator.play(desired)
+	elif _has_animation(&"idle"):
+		animator.play("idle")
+
+func _has_animation(animation_name: StringName) -> bool:
+	return animator.sprite_frames.has_animation(animation_name) and animator.sprite_frames.get_frame_count(animation_name) > 0
 
 func _on_animation_finished() -> void:
 	match state:
@@ -273,5 +326,5 @@ func reset_to_normal() -> void:
 	airborne = false
 	highest_y = global_position.y
 	_regrab_remaining = regrab_delay
-	animator.play("idle")
+	_play_ground_animation()
 	_end_prayer()
