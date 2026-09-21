@@ -136,3 +136,28 @@ func grab_top_y() -> float:
 
 func grab_bottom_y() -> float:
 	return bottom_y() + grab_bottom_margin
+
+func overlaps_character(body: CollisionObject2D) -> bool:
+	## 按当前位置比较真实碰撞形状，避免Area2D重叠列表在移动后的刷新延迟。
+	## 不使用手部、角色原点或矩形包围盒；支持多个启用的碰撞形状。
+	if not monitoring or (collision_mask & body.collision_layer) == 0:
+		return false
+	if get_canvas() != body.get_canvas():
+		return false
+	force_update_transform()
+	body.force_update_transform()
+	for area_owner in get_shape_owners():
+		if is_shape_owner_disabled(area_owner):
+			continue
+		var area_transform := global_transform * shape_owner_get_transform(area_owner)
+		for area_index in range(shape_owner_get_shape_count(area_owner)):
+			var area_shape := shape_owner_get_shape(area_owner, area_index)
+			for body_owner in body.get_shape_owners():
+				if body.is_shape_owner_disabled(body_owner):
+					continue
+				var body_transform := body.global_transform * body.shape_owner_get_transform(body_owner)
+				for body_index in range(body.shape_owner_get_shape_count(body_owner)):
+					var body_shape := body.shape_owner_get_shape(body_owner, body_index)
+					if area_shape.collide(area_transform, body_shape, body_transform):
+						return true
+	return false
