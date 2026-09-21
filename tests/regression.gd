@@ -40,9 +40,10 @@ func make_player() -> GamePlayer:
 	return player
 
 func _run() -> void:
-	for action in ["left", "right", "run", "jump", "pray", "climb_grab", "climb_up", "climb_down"]:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
+	# 从没有任何游戏输入动作开始，复现直接复制脚本的场景。
+	for action in ["left", "right", "run", "jump", "pray", "climb_grab", "climb_up", "climb_down", "fullscreen"]:
+		if InputMap.has_action(action):
+			InputMap.erase_action(action)
 	var chain_scene := load("res://scenes/chain.tscn") as PackedScene
 	var chain := chain_scene.instantiate() as ClimbChain
 	root.add_child(chain)
@@ -67,12 +68,34 @@ func _run() -> void:
 	var player := make_player()
 	player.position = Vector2(0, 180)
 	root.add_child(player)
+	check(player.is_physics_processing(), "缺少旧输入动作不应停用玩家")
 	player.set_physics_process(false)
 	await physics_frame
 	await physics_frame
-	check(player._try_grab_chain(), "空中检测范围可以抓链")
+	check(InputMap.has_action("fullscreen"), "自动建立全屏输入")
+	check(InputMap.has_action("jump"), "自动建立共用跳跃/抓链输入")
+	await process_frame
+	key(KEY_RIGHT, true)
+	player._physics_process(1.0 / 60.0)
+	check(player.velocity.x == player.walk_speed, "真实右方向键移动")
+	key(KEY_SHIFT, true)
+	player._physics_process(1.0 / 60.0)
+	check(player.velocity.x == player.run_speed, "Shift加速")
+	key(KEY_RIGHT, false)
+	key(KEY_SHIFT, false)
+	key(KEY_LEFT, true)
+	player._physics_process(1.0 / 60.0)
+	check(player.velocity.x == -player.walk_speed, "真实左方向键移动")
+	key(KEY_LEFT, false)
+	player.position = Vector2(0, 180)
+	await physics_frame
+	await process_frame
+	key(KEY_X, true)
+	player._physics_process(1.0 / 60.0)
+	key(KEY_X, false)
 	check(player.state == GamePlayer.State.CLIMB, "进入攀爬状态")
 	check(player.animator.frame == 0 and not player.animator.is_playing(), "抓链保持第0帧")
+	await process_frame
 	Input.action_press("climb_up")
 	var old_y := player.position.y
 	player._update_climb(1.0 / 60.0)
@@ -81,9 +104,9 @@ func _run() -> void:
 	player._update_climb(1.0 / 60.0)
 	check(player.animator.frame == 0 and not player.animator.is_playing(), "松键回第一帧")
 	await process_frame
-	Input.action_press("jump")
-	player._update_climb(1.0 / 60.0)
-	Input.action_release("jump")
+	key(KEY_X, true)
+	player._physics_process(1.0 / 60.0)
+	key(KEY_X, false)
 	check(player.state == GamePlayer.State.NORMAL and player.velocity.y < 0, "离链跳跃")
 	check(player.animator.animation == &"jump" and player.animator.frame == 0, "离链jump首帧")
 	check(player.current_chain == null and player.airborne, "离链状态清理")
@@ -133,5 +156,32 @@ func _run() -> void:
 				break
 		var expected := GamePlayer.State.LANDING_LOWER if start_y == 300.0 else GamePlayer.State.LANDING_HIGHER
 		check(player.state == expected, "下落高度选择正确动画")
+	var incomplete := make_player()
+	incomplete.get_node("ClimbGrip").free()
+	incomplete.animator.sprite_frames.remove_animation("climb")
+	incomplete.position = Vector2(700, 100)
+	root.add_child(incomplete)
+	check(incomplete.is_physics_processing(), "缺少ClimbGrip/climb不应禁用行走")
+	incomplete.set_physics_process(false)
+	check(not incomplete._try_grab_chain(), "配置不全安全拒绝抓链")
+	await process_frame
+	key(KEY_RIGHT, true)
+	incomplete._physics_process(1.0 / 60.0)
+	check(incomplete.velocity.x > 0.0, "配置不全仍能右移")
+	key(KEY_RIGHT, false)
+	key(KEY_Z, true)
+	check(Input.is_action_just_pressed("pray") and not Input.is_action_pressed("jump"), "Z只触发祈祷")
+	key(KEY_Z, false)
+	key(KEY_V, true)
+	check(Input.is_action_just_pressed("fullscreen"), "V映射全屏")
+	key(KEY_V, false)
 	print("Regression checks completed. Failures: ", failures)
 	quit(0 if failures == 0 else 1)
+
+func key(code: Key, pressed: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = code
+	event.physical_keycode = code
+	event.pressed = pressed
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
