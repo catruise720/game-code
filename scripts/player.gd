@@ -12,7 +12,12 @@ signal high_fall_finished
 @export var animator: AnimatedSprite2D
 
 @export_group("Climbing")
-@export var climb_speed: float = 90.0
+## 上下攀爬速度（像素/秒），保留原参数名兼容已有场景。
+@export_range(0, 500, 1) var climb_speed: float = 90.0
+## 左右横移速度（像素/秒）。
+@export_range(0, 300, 1) var climb_horizontal_speed: float = 35.0
+## 手部相对锁链中心向左、向右各自允许的距离（像素）。
+@export_range(0, 80, 1) var climb_horizontal_limit: float = 16.0
 @export var regrab_delay: float = 0.15
 
 @export_group("Landing")
@@ -178,7 +183,7 @@ func _try_grab_chain() -> bool:
 		if chain == null or not chain.overlaps_body(self):
 			continue
 		var hand_y := climb_grip.global_position.y
-		if hand_y < chain.top_y() or hand_y > chain.bottom_y():
+		if hand_y < chain.grab_top_y() or hand_y > chain.grab_bottom_y():
 			continue
 		var offset_x := chain.global_position.x - climb_grip.global_position.x
 		if test_move(global_transform, Vector2(offset_x, 0.0)):
@@ -213,9 +218,23 @@ func _update_climb(delta: float) -> void:
 		move_and_slide()
 		return
 	var direction_y := Input.get_axis("climb_up", "climb_down")
-	var hand_y := climb_grip.global_position.y
-	var target_y := clampf(hand_y + direction_y * climb_speed * delta, current_chain.top_y(), current_chain.bottom_y())
-	velocity = Vector2(0.0, (target_y - hand_y) / delta)
+	var direction_x := Input.get_axis("left", "right")
+	var hand_position := climb_grip.global_position
+	var target_y := clampf(
+		hand_position.y + direction_y * climb_speed * delta,
+		current_chain.grab_top_y(), current_chain.grab_bottom_y()
+	)
+	# 抓取余量也作为悬停/攀爬边界，不会抓住后突然被拉回图像端点。
+	var horizontal_limit := minf(climb_horizontal_limit, current_chain.detection_width / 2.0)
+	var target_x := clampf(
+		hand_position.x + direction_x * climb_horizontal_speed * delta,
+		current_chain.global_position.x - horizontal_limit,
+		current_chain.global_position.x + horizontal_limit
+	)
+	velocity = Vector2(
+		(target_x - hand_position.x) / delta,
+		(target_y - hand_position.y) / delta
+	)
 	var previous_y := global_position.y
 	move_and_slide() # 此分支不施加重力
 	if direction_y != 0.0 and absf(global_position.y - previous_y) > 0.01:
