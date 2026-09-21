@@ -31,6 +31,16 @@ extends Area2D
 		detection_width = maxf(8.0, value)
 		_refresh()
 
+@export_group("抓取上下余量")
+@export_range(0, 160, 1) var grab_top_margin: float = 30.0:
+	set(value):
+		grab_top_margin = maxf(0.0, value)
+		_refresh()
+@export_range(0, 160, 1) var grab_bottom_margin: float = 60.0:
+	set(value):
+		grab_bottom_margin = maxf(0.0, value)
+		_refresh()
+
 @export_group("挂件拼接")
 @export_range(0, 128, 1) var top_overlap: float = 4.0:
 	set(value):
@@ -78,9 +88,9 @@ func _refresh() -> void:
 	picture.position = Vector2(-roundf(chain_width / 2.0), 0.0)
 	picture.z_index = 0
 	var rectangle := RectangleShape2D.new()
-	rectangle.size = Vector2(detection_width, length)
+	rectangle.size = Vector2(detection_width, length + grab_top_margin + grab_bottom_margin)
 	collision.shape = rectangle
-	collision.position = Vector2(0.0, length / 2.0)
+	collision.position = Vector2(0.0, (length + grab_bottom_margin - grab_top_margin) / 2.0)
 	collision.scale = Vector2.ONE
 	collision.rotation = 0.0
 	_update_cap("TopCap", top_texture, true)
@@ -120,3 +130,9 @@ func top_y() -> float:
 
 func bottom_y() -> float:
 	return global_position.y + length
+
+func grab_top_y() -> float:
+	return top_y() - grab_top_margin
+
+func grab_bottom_y() -> float:
+	return bottom_y() + grab_bottom_margin
