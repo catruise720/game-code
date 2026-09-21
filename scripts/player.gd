@@ -16,8 +16,6 @@ signal high_fall_finished
 @export_range(0, 500, 1) var climb_speed: float = 90.0
 ## 左右横移速度（像素/秒）。
 @export_range(0, 300, 1) var climb_horizontal_speed: float = 35.0
-## 手部相对锁链中心左右各自的脱离距离（像素）；超过后松手下落。
-@export_range(0, 80, 1) var climb_horizontal_limit: float = 16.0
 @export var regrab_delay: float = 0.15
 
 @export_group("Landing")
@@ -180,7 +178,7 @@ func _try_grab_chain() -> bool:
 	var nearest_distance := INF
 	for node in get_tree().get_nodes_in_group("climb_chain"):
 		var chain := node as ClimbChain
-		if chain == null or not chain.overlaps_body(self):
+		if chain == null or not chain.overlaps_character(self):
 			continue
 		# 以身体碰撞体与Area2D相交为准，不再额外用手部高度拒绝抓取。
 		var offset_x := chain.global_position.x - climb_grip.global_position.x
@@ -202,9 +200,12 @@ func _try_grab_chain() -> bool:
 	_hold_frame(&"climb", 0)
 	return true
 
-func _update_climb(delta: float) -> void:
+func _update_climb(_delta: float) -> void:
 	if not is_instance_valid(current_chain):
 		_release_to_fall()
+		return
+	if not current_chain.overlaps_character(self):
+		_release_to_fall(true)
 		return
 	if Input.is_action_just_pressed("jump"):
 		var direction := Input.get_axis("left", "right")
@@ -217,23 +218,15 @@ func _update_climb(delta: float) -> void:
 		return
 	var direction_y := Input.get_axis("climb_up", "climb_down")
 	var direction_x := Input.get_axis("left", "right")
-	var hand_position := climb_grip.global_position
-	var vertical_motion := direction_y * climb_speed * delta
-	# 身体刚碰到范围时，手部可能仍在端点外。只限制继续向外移动，
-	# 允许向范围内攀爬；无输入时不瞬移到端点。
-	if vertical_motion < 0.0:
-		vertical_motion = maxf(vertical_motion, minf(0.0, current_chain.grab_top_y() - hand_position.y))
-	elif vertical_motion > 0.0:
-		vertical_motion = minf(vertical_motion, maxf(0.0, current_chain.grab_bottom_y() - hand_position.y))
-	var horizontal_limit := minf(climb_horizontal_limit, current_chain.detection_width / 2.0)
+	# 四个方向均不使用手部坐标或人为距离限制；实体墙/地面仍由物理碰撞阻挡。
 	velocity = Vector2(
 		direction_x * climb_horizontal_speed,
-		vertical_motion / delta
+		direction_y * climb_speed
 	)
 	var previous_y := global_position.y
 	move_and_slide() # 此分支不施加重力
-	# 检查碰撞处理后的实际位置，撞墙而没有移出去时不会松手。
-	if absf(climb_grip.global_position.x - current_chain.global_position.x) > horizontal_limit:
+	# 身体任意启用碰撞形状仍有重叠便保持攀爬，全部离开才松手。
+	if not current_chain.overlaps_character(self):
 		_release_to_fall(true)
 		return
 	if direction_y != 0.0 and absf(global_position.y - previous_y) > 0.01:
