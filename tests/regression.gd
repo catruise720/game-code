@@ -139,6 +139,8 @@ func _run() -> void:
 	check(player.climb_grip.global_position.x < -16.0 and player.state == GamePlayer.State.NORMAL, "左移越界自动松手")
 	Input.action_release("left")
 	player._regrab_remaining = 0.0
+	player.position = Vector2(0, 180)
+	player.force_update_transform()
 	check(player._try_grab_chain(), "左侧脱离后重新抓链")
 	player.climb_speed = 120.0
 	Input.action_press("climb_down")
@@ -157,6 +159,48 @@ func _run() -> void:
 		var held_y := player.position.y
 		player._update_climb(1.0 / 60.0)
 		check(is_equal_approx(player.position.y, held_y), "余量内保持悬停")
+	# 手部早已低于检测区下端，身体顶部还在区内：仍可继续向下。
+	player.position = Vector2(0, 710)
+	player.force_update_transform()
+	check(player.climb_grip.global_position.y > chain.grab_bottom_y(), "复现手部超出下端")
+	check(chain.overlaps_character(player), "身体还与检测区重叠")
+	var before_down := player.position.y
+	Input.action_press("climb_down")
+	player._update_climb(1.0 / 60.0)
+	check(player.position.y > before_down and player.state == GamePlayer.State.CLIMB, "手部越界仍可下爬")
+	for step in range(100):
+		player._update_climb(1.0 / 60.0)
+		if player.state != GamePlayer.State.CLIMB:
+			break
+	check(not chain.overlaps_character(player) and player.airborne, "身体全部离开下端后松手")
+	check(player.animator.animation == &"jump" and player.animator.frame == 1, "下端脱离保持jump末帧")
+	Input.action_release("climb_down")
+	# 手部标记可以位于任意位置，不再参与攀爬中的范围判断。
+	player.position = Vector2(0, 180)
+	player.force_update_transform()
+	player._regrab_remaining = 0.0
+	check(player._try_grab_chain(), "返回链条重新抓取")
+	player.climb_grip.position = Vector2(999, -999)
+	player._update_climb(1.0 / 60.0)
+	check(player.state == GamePlayer.State.CLIMB, "手部标记位置不影响攀附状态")
+	player.climb_grip.position = Vector2(0, -35)
+	# 上端同样按身体重叠：不使用手部上界钳制。
+	player.position = Vector2(0, -70)
+	player.force_update_transform()
+	Input.action_press("climb_up")
+	var before_up := player.position.y
+	player._update_climb(1.0 / 60.0)
+	check(player.position.y < before_up and player.state == GamePlayer.State.CLIMB, "手部超出上端仍可上爬")
+	for step in range(100):
+		player._update_climb(1.0 / 60.0)
+		if player.state != GamePlayer.State.CLIMB:
+			break
+	check(not chain.overlaps_character(player) and player.airborne, "身体全部离开上端后松手")
+	Input.action_release("climb_up")
+	player.position = Vector2(0, 180)
+	player.force_update_transform()
+	player._regrab_remaining = 0.0
+	check(player._try_grab_chain(), "准备离链跳跃测试")
 	await process_frame
 	key(KEY_X, true)
 	player._physics_process(1.0 / 60.0)
