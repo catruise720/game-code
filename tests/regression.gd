@@ -277,6 +277,46 @@ func _run() -> void:
 	key(KEY_V, true)
 	check(Input.is_action_just_pressed("fullscreen"), "V映射全屏")
 	key(KEY_V, false)
+	# 实际Camera2D：上下观察、攀爬抑制、四边限制及视窗尺寸变化。
+	var view := SubViewport.new()
+	view.size = Vector2i(800, 450)
+	root.add_child(view)
+	var camera := preload("res://scripts/exploration_camera.gd").new()
+	camera.player = incomplete
+	camera.follow_offset = Vector2.ZERO
+	incomplete.position = Vector2(990, 540)
+	incomplete.state = GamePlayer.State.NORMAL
+	view.add_child(camera)
+	camera.set_physics_process(false)
+	Input.action_press("climb_up")
+	for frame in range(120):
+		camera._physics_process(1.0 / 60.0)
+	check(camera.global_position.y < 400, "普通状态按上键向上观察")
+	incomplete.state = GamePlayer.State.CLIMB
+	for frame in range(120):
+		camera._physics_process(1.0 / 60.0)
+	check(absf(camera.global_position.y - 540) < 1.0, "攀爬时上键不控制观察")
+	Input.action_release("climb_up")
+	incomplete.state = GamePlayer.State.NORMAL
+	Input.action_press("climb_down")
+	for frame in range(120):
+		camera._physics_process(1.0 / 60.0)
+	check(camera.global_position.y > 680, "普通状态下键向下观察")
+	Input.action_release("climb_down")
+	for frame in range(120):
+		camera._physics_process(1.0 / 60.0)
+	check(absf(camera.global_position.y - 540) < 1.0, "松开观察键恢复跟随")
+	incomplete.position = Vector2(-10000, 10000)
+	camera._physics_process(10.0)
+	check(camera.global_position.is_equal_approx(Vector2(400, 855)), "镜头中心为半视野留出边界")
+	check(camera.get_screen_center_position().is_equal_approx(camera.global_position), "真实镜头中心与限制位置一致")
+	camera.map_bounds = Rect2(210, 50, 100, 100)
+	view.size = Vector2i(1200, 900)
+	camera._physics_process(1.0 / 60.0)
+	var half_view := camera.get_viewport_rect().size / camera.zoom / 2.0
+	var screen_start := camera.global_position - half_view
+	var screen_end := camera.global_position + half_view
+	check(screen_start.x >= 209.99 and screen_start.y >= 49.99 and screen_end.x <= 310.01 and screen_end.y <= 150.01, "偏移地图及大视窗仍不越界")
 	print("Regression checks completed. Failures: ", failures)
 	quit(0 if failures == 0 else 1)
 
