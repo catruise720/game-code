@@ -61,9 +61,6 @@ func _ready() -> void:
 	_play_ground_animation()
 
 func _physics_process(delta: float) -> void:
-	if Input.is_action_just_pressed("fullscreen"):
-		_toggle_fullscreen()
-
 	_regrab_remaining = maxf(0.0, _regrab_remaining - delta)
 	if state == State.NORMAL:
 		if Input.is_action_just_pressed("pray") and is_on_floor():
@@ -128,7 +125,7 @@ func _horizontal_speed() -> float:
 
 
 func _ensure_default_input_map() -> void:
-	# 在运行时统一这八个动作的键盘绑定，防止旧Z抓链与Z祈祷冲突。
+	# 在运行时统一玩家动作的键盘绑定，防止旧Z抓链与Z祈祷冲突。
 	# 保留手柄等非键盘绑定；不改写磁盘上的项目设置。
 	_ensure_key_action(&"left", KEY_LEFT)
 	_ensure_key_action(&"right", KEY_RIGHT)
@@ -137,7 +134,6 @@ func _ensure_default_input_map() -> void:
 	_ensure_key_action(&"run", KEY_SHIFT)
 	_ensure_key_action(&"climb_up", KEY_UP)
 	_ensure_key_action(&"climb_down", KEY_DOWN)
-	_ensure_key_action(&"fullscreen", KEY_V)
 
 
 func _ensure_key_action(action_name: StringName, keycode: Key) -> void:
@@ -152,14 +148,6 @@ func _ensure_key_action(action_name: StringName, keycode: Key) -> void:
 	key_event.physical_keycode = keycode
 	InputMap.action_add_event(action_name, key_event)
 
-
-func _toggle_fullscreen() -> void:
-	var mode := DisplayServer.window_get_mode()
-	if mode == DisplayServer.WINDOW_MODE_FULLSCREEN \
-		or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	else:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func _begin_jump() -> void:
 	state = State.NORMAL
