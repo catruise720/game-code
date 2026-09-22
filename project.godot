@@ -2,6 +2,9 @@
 config_version=5
 [application]
 config/name="Church Game - Script Baseline"
+[autoload]
+RoomManager="*res://scripts/rooms/room_manager.gd"
+WindowController="*res://scripts/system/window_controller.gd"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
