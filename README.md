@@ -1,6 +1,6 @@
 # 破败教堂探索解谜：代码整理版
 
-整理日期：2026-09-21。Godot 4 / GDScript。
+整理日期：2026-09-22。Godot 4 / GDScript。详细版本变化见 `CHANGELOG.md`。
 
 这是根据当前对话整理的代码基线，不是从本地项目完整导出的版本。玩家美术、地图、SpriteFrames 等仍使用自己的项目资源。没有凭空加入尚未完成的存档、耐力、圣物或结局系统。
 
@@ -10,6 +10,11 @@
 - `scripts/prayer_statue.gd`：祈祷范围、启用开关、祈祷事件。
 - `scripts/climb_chain.gd`：可调长度/宽度、上下挂件、攀爬范围。
 - `scripts/exploration_camera.gd`：普通状态↑↓观察、松键回位、地图边界限制。
+- `scripts/rooms/room_manager.gd`：全局淡入淡出、换房与出生点定位。
+- `scripts/rooms/room_controller.gd`：房间根节点初始化。
+- `scripts/rooms/room_exit.gd`：出口检测区与目标房间设置。
+- `scripts/rooms/room_spawn.gd`：可命名出生点。
+- `scripts/system/window_controller.gd`：唯一的V键窗口/全屏控制器。
 - `scenes/chain.tscn`：锁链空素材模板，导入图片后使用。
 - `scenes/prayer_statue.tscn`：雕像空素材模板，原点在雕像脚下。
 - `tests/regression.gd`：不依赖正式美术的自动回归检查。
@@ -52,7 +57,7 @@
 
 ## 输入映射
 
-脚本运行时自动创建以下动作，并统一这些动作的键盘绑定；保留手柄绑定。不会改写磁盘中的项目设置。不要另挂一份读取V切换全屏的脚本，否则同次按键可能切换两次。
+玩家脚本运行时自动创建角色动作并统一键盘绑定；窗口脚本单独创建fullscreen动作。保留手柄绑定，不会改写磁盘中的项目设置。全项目只允许一个WindowController，否则V仍可能执行两次。
 
 | 动作名 | 建议按键 |
 |---|---|
@@ -63,7 +68,7 @@
 | pray | Z |
 | climb_up | ↑ |
 | climb_down | ↓ |
-| fullscreen | V |
+| fullscreen | V（由WindowController处理） |
 
 X按下一次：锁链范围内优先抓链，否则普通跳跃；攀爬中按X跳离。跳离后需要松开再按X，并等待默认0.15秒再次抓取间隔。旧动作climb_grab不再读取。V在窗口和全屏之间切换；需要在独立游戏窗口测试，编辑器嵌入式游戏窗口可能不支持全屏。
 
@@ -170,6 +175,16 @@ Map Bounds使用地图的世界坐标矩形：Position为左上角，Size为宽�
 ## 待实现系统
 
 耐力消耗与恢复、存档、七件圣物与记忆、单向门条件、谜题选择、惩罚房间传送、结局判定、NPC和机关逻辑。这里只预留了祈祷与高落地事件。
+
+## 房间连接与平滑转场
+
+正式项目在“项目 → 项目设置 → 全局/Autoload”中加入 `scripts/rooms/room_manager.gd`，名称必须为 `RoomManager`。WindowController也可设为Autoload，但不要再在其他场景挂同一脚本。
+
+每个房间推荐结构：根节点挂RoomController；玩家直接命名为 `Player`；出生点使用Marker2D并挂RoomSpawn；出口使用Area2D并挂RoomExit，下面放CollisionShape2D。出口的Target Room Path填写目标tscn，Target Spawn Id填写目标房间出生点的Spawn Id。
+
+例如教学房间右侧出口进入A房间左下角：出口Target Room Path填A房间路径，Target Spawn Id填 `from_tutorial`；A房间相应Marker2D的Spawn Id也填 `from_tutorial`。出口激活延迟默认0.15秒，避免玩家出生时仍压在返回出口上而立即弹回。
+
+RoomManager先黑屏淡出，再以延迟调用方式换场景，定位玩家后淡入；不会在Area2D的物理回调中直接删除当前房间。Fade Duration默认0.35秒，可在Autoload节点检查器中调整。若直接单独运行房间，RoomController会使用 `default` 出生点。
 
 ## 验证结果与运行方式
 
