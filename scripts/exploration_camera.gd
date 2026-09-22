@@ -52,8 +52,9 @@ func _physics_process(delta: float) -> void:
 		return
 	_refresh_view()
 	var target_look := 0.0
-	# 只在普通活动状态观察；攀爬、祈祷及晕倒时回到跟随位置。
-	if player.state == GamePlayer.State.NORMAL:
+	# 只有玩家站在地面、处于普通状态且没有其他操作时，单独按↑或↓才观察。
+	# 空中、攀爬、祈祷、移动、奔跑或同时按上下键时都回到跟随位置。
+	if _can_start_look():
 		var direction := Input.get_axis("climb_up", "climb_down")
 		if direction < 0.0:
 			target_look = -look_up_distance
@@ -66,6 +67,21 @@ func _physics_process(delta: float) -> void:
 	# 平滑后再限制一次，窗口尺寸或地图范围变化时也不露出边界。
 	global_position = _clamp_center(global_position.lerp(desired, weight))
 	force_update_scroll()
+
+
+func _can_start_look() -> bool:
+	if player.state != GamePlayer.State.NORMAL or not player.is_on_floor():
+		return false
+	var up_pressed := Input.is_action_pressed("climb_up")
+	var down_pressed := Input.is_action_pressed("climb_down")
+	# 必须且只能按下一个观察方向。
+	if up_pressed == down_pressed:
+		return false
+	# 这些玩家操作与观察同时出现时，观察不触发并自动回位。
+	for action in [&"left", &"right", &"run", &"jump", &"pray"]:
+		if Input.is_action_pressed(action):
+			return false
+	return true
 
 func _refresh_view() -> void:
 	var viewport_size := get_viewport_rect().size
