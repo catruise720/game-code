@@ -285,28 +285,38 @@ func _run() -> void:
 	var camera := preload("res://scripts/exploration_camera.gd").new()
 	camera.player = incomplete
 	camera.follow_offset = Vector2.ZERO
-	incomplete.position = Vector2(990, 540)
+	incomplete.position = Vector2(990, 440)
 	incomplete.state = GamePlayer.State.NORMAL
+	incomplete.velocity = Vector2(0, 10)
+	incomplete.move_and_slide()
+	check(incomplete.is_on_floor(), "摄像机观察测试玩家位于地面")
 	view.add_child(camera)
 	camera.set_physics_process(false)
 	Input.action_press("climb_up")
 	for frame in range(120):
 		camera._physics_process(1.0 / 60.0)
-	check(camera.global_position.y < 400, "普通状态按上键向上观察")
+	check(camera.global_position.y < 300, "地面静止时单独按上键向上观察")
 	incomplete.state = GamePlayer.State.CLIMB
 	for frame in range(120):
 		camera._physics_process(1.0 / 60.0)
-	check(absf(camera.global_position.y - 540) < 1.0, "攀爬时上键不控制观察")
+	check(absf(camera.global_position.y - 440) < 1.0, "攀爬时上键不控制观察")
 	Input.action_release("climb_up")
 	incomplete.state = GamePlayer.State.NORMAL
+	Input.action_press("right")
+	Input.action_press("climb_up")
+	for frame in range(120):
+		camera._physics_process(1.0 / 60.0)
+	check(absf(camera.global_position.y - 440) < 1.0, "有左右输入时上下键不触发观察")
+	Input.action_release("right")
+	Input.action_release("climb_up")
 	Input.action_press("climb_down")
 	for frame in range(120):
 		camera._physics_process(1.0 / 60.0)
-	check(camera.global_position.y > 680, "普通状态下键向下观察")
+	check(camera.global_position.y > 580, "地面静止时单独按下键向下观察")
 	Input.action_release("climb_down")
 	for frame in range(120):
 		camera._physics_process(1.0 / 60.0)
-	check(absf(camera.global_position.y - 540) < 1.0, "松开观察键恢复跟随")
+	check(absf(camera.global_position.y - 440) < 1.0, "松开观察键恢复跟随")
 	incomplete.position = Vector2(-10000, 10000)
 	camera._physics_process(10.0)
 	check(camera.global_position.is_equal_approx(Vector2(400, 855)), "镜头中心为半视野留出边界")
