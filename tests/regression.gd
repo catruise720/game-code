@@ -44,6 +44,7 @@ func _run() -> void:
 	for action in ["left", "right", "run", "jump", "pray", "climb_grab", "climb_up", "climb_down", "fullscreen"]:
 		if InputMap.has_action(action):
 			InputMap.erase_action(action)
+	WindowController._ensure_key_action(&"fullscreen", KEY_V)
 	var chain_scene := load("res://scenes/chain.tscn") as PackedScene
 	var chain := chain_scene.instantiate() as ClimbChain
 	root.add_child(chain)
@@ -75,7 +76,7 @@ func _run() -> void:
 	player.set_physics_process(false)
 	await physics_frame
 	await physics_frame
-	check(InputMap.has_action("fullscreen"), "自动建立全屏输入")
+	check(InputMap.has_action("fullscreen"), "窗口控制器建立全屏输入")
 	check(InputMap.has_action("jump"), "自动建立共用跳跃/抓链输入")
 	await process_frame
 	key(KEY_RIGHT, true)
