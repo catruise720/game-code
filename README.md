@@ -9,7 +9,7 @@
 - `scripts/player.gd`：玩家完整控制脚本。
 - `scripts/prayer_statue.gd`：祈祷范围、启用开关、祈祷事件。
 - `scripts/climb_chain.gd`：可调长度/宽度、上下挂件、攀爬范围。
-- `scripts/exploration_camera.gd`：普通状态↑↓观察、松键回位、地图边界限制。
+- `scripts/exploration_camera.gd`：地面静止时单独按↑↓观察、松键回位、地图边界限制。
 - `scripts/rooms/room_manager.gd`：全局淡入淡出、换房与出生点定位。
 - `scripts/rooms/room_controller.gd`：房间根节点初始化。
 - `scripts/rooms/room_exit.gd`：出口检测区与目标房间设置。
@@ -164,7 +164,7 @@ Map Bounds使用地图的世界坐标矩形：Position为左上角，Size为宽�
 | Look Speed | 240 | 观察偏移变化速度（像素/秒） |
 | Return Speed | 320 | 松键回位的偏移变化速度 |
 
-普通状态（含空中普通跳跃）按住↑或↓观察；松键回位。攀爬、跪拜、落地锁定或晕倒时观察偏移回零，↑↓不会同时移动镜头和攀爬。偏移回零仍使用平滑过渡。
+只有玩家在地面、处于NORMAL状态且没有按左右、Shift、X或Z时，单独按住↑或↓才会观察。上下同时按、空中、攀爬、跪拜、落地锁定或晕倒时观察偏移回零；因此锁链输入不会再误触地图观察。偏移回零仍使用平滑过渡。
 
 脚本禁用Camera2D原生平滑与拖拽，使用自己的平滑和世界坐标限制，Offset始终为0；Camera2D的Offset可以越过Limit，因此不靠Offset实现观察。按视窗大小/Zoom计算半视野限制镜头中心，窗口大小变化后重新计算。视野若比整张地图还大，自动增大Zoom到最小可容纳倍率，避免露底，窗口恢复后按Camera Zoom重算。严格边界时靠近地图边缘玩家不一定在屏幕中央。
 
