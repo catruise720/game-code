@@ -112,6 +112,7 @@ if not ReadingUI.has_read(&"water_old_ritual"):
 ## 故障排查
 
 - 报找不到ReadingPanel/ReadingPlaque：确认两份配套脚本已导入且无解析错误；等Godot扫描完成，不只替换player.gd。
+- 提示玩家没有Animator：新版会自动搜索玩家子节点内带SpriteFrames的AnimatedSprite2D，包括嵌套节点；仍找不到时，请选中玩家根节点，把正在使用的AnimatedSprite2D拖到检查器Movement → Animator，并确认精灵的Sprite Frames不是空。只用Sprite2D显示人物时需要先建立动画精灵。
 - 提示阅读框未配置：检查Autoload路径为tscn，名称ReadingUI，启用且只存在一次。
 - 按Z没反应：确认站在地面且普通状态、铭牌Enabled/Monitoring开启、Mask包含玩家层、碰撞体重叠。
 - 打开就关闭或同时跪拜：删掉之前额外粘贴的阅读_unhandled_input代码/旧输入监听，只使用本版完整player.gd。

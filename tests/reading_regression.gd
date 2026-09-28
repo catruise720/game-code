@@ -118,6 +118,19 @@ func _run() -> void:
 	reading_panel.reset_progress()
 	reading_panel.import_read_clues(ids)
 	check(reading_panel.has_read(&"water_old_ritual"), "存档接入接口可恢复已读ID")
+	# 玩家动画节点重命名、嵌套或导出引用因换脚本丢失时，仍能找回有效帧资源。
+	var nested_player := GamePlayer.new()
+	var holder := Node2D.new()
+	var empty_sprite := AnimatedSprite2D.new()
+	var configured := AnimatedSprite2D.new()
+	configured.name = "CharacterArt"
+	configured.sprite_frames = SpriteFrames.new()
+	holder.add_child(empty_sprite)
+	holder.add_child(configured)
+	nested_player.add_child(holder)
+	check(nested_player._find_animated_sprite(nested_player) == configured, "自动查找嵌套且有SpriteFrames的动画节点")
+	check(not nested_player._has_animation(&"idle"), "空Animator时动画检查不会再次访问null")
+	nested_player.free()
 	print("Reading regression checks completed. Failures: ", failures)
 	quit(0 if failures == 0 else 1)
 

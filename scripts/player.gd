@@ -38,10 +38,11 @@ var _regrab_remaining: float = 0.0
 func _ready() -> void:
 	_ensure_default_input_map()
 
-	if animator == null:
-		animator = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	# 替换脚本后检查器中原有导出引用可能丢失；支持精灵在玩家子节点内嵌套。
+	if not is_instance_valid(animator) or animator.sprite_frames == null:
+		animator = _find_animated_sprite(self)
 	if animator == null or animator.sprite_frames == null:
-		push_error("请在玩家检查器的 Animator 中指定带 SpriteFrames 的 AnimatedSprite2D。")
+		push_error("玩家 %s 没有找到带 SpriteFrames 的 AnimatedSprite2D：请将现有动画节点拖到检查器 Animator，或给该节点设置 SpriteFrames。" % get_path())
 		set_physics_process(false)
 		return
 	if climb_grip == null:
@@ -59,6 +60,17 @@ func _ready() -> void:
 		animator.animation_finished.connect(_on_animation_finished)
 	highest_y = global_position.y
 	_play_ground_animation()
+
+
+func _find_animated_sprite(parent: Node) -> AnimatedSprite2D:
+	# 优先找到实际有 SpriteFrames 的节点，而不是同名但尚未配置的占位节点。
+	for child in parent.get_children():
+		if child is AnimatedSprite2D and child.sprite_frames != null:
+			return child as AnimatedSprite2D
+		var nested := _find_animated_sprite(child)
+		if nested != null:
+			return nested
+	return null
 
 func _physics_process(delta: float) -> void:
 	_regrab_remaining = maxf(0.0, _regrab_remaining - delta)
@@ -298,7 +310,7 @@ func _play_ground_animation() -> void:
 		animator.play("idle")
 
 func _has_animation(animation_name: StringName) -> bool:
-	return animator.sprite_frames.has_animation(animation_name) and animator.sprite_frames.get_frame_count(animation_name) > 0
+	return is_instance_valid(animator) and animator.sprite_frames != null and animator.sprite_frames.has_animation(animation_name) and animator.sprite_frames.get_frame_count(animation_name) > 0
 
 func _on_animation_finished() -> void:
 	match state:
