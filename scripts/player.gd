@@ -1,6 +1,6 @@
 class_name GamePlayer
 extends CharacterBody2D
-## Godot 4：普通移动、祈祷、分高度落地、锁链攀爬。
+## Godot 4：普通移动、祈祷、分高度落地、锁链攀爬、Z键阅读。
 
 signal high_fall_finished
 
@@ -26,7 +26,7 @@ signal high_fall_finished
 
 enum State {
 	NORMAL, CLIMB, KNEELING_DOWN, KNEELING, STANDING_UP,
-	LANDING_LOWER, LANDING_HIGHER, FAINTED
+	LANDING_LOWER, LANDING_HIGHER, FAINTED, READING
 }
 var state: State = State.NORMAL
 var current_chain: ClimbChain
@@ -62,8 +62,13 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_regrab_remaining = maxf(0.0, _regrab_remaining - delta)
+	if state == State.READING:
+		_update_reading(delta)
+		return # 关闭当帧也不再处理Z祈祷或X跳跃
 	if state == State.NORMAL:
 		if Input.is_action_just_pressed("pray") and is_on_floor():
+			if _try_read_plaque():
+				return # 同一次Z只打开阅读框
 			_try_prayer()
 		# X 共用：附近有锁链时优先抓链；抓不到才由普通移动处理为跳跃。
 		if state == State.NORMAL and Input.is_action_just_pressed("jump"):
@@ -320,6 +325,7 @@ func _on_animation_finished() -> void:
 
 func reset_to_normal() -> void:
 	## 外部传送或复苏后调用。这里不实现传送目的地或结局。
+	_cancel_reading()
 	state = State.NORMAL
 	current_chain = null
 	velocity = Vector2.ZERO
@@ -328,3 +334,67 @@ func reset_to_normal() -> void:
 	_regrab_remaining = regrab_delay
 	_play_ground_animation()
 	_end_prayer()
+
+
+func _reading_panel() -> ReadingPanel:
+	return get_node_or_null("/root/ReadingUI") as ReadingPanel
+
+
+func _try_read_plaque() -> bool:
+	if state != State.NORMAL or not is_on_floor() or airborne:
+		return false
+	var nearest: ReadingPlaque = null
+	var nearest_distance := INF
+	for node in get_tree().get_nodes_in_group(&"reading_plaque"):
+		var plaque := node as ReadingPlaque
+		if plaque == null or not plaque.can_read(self):
+			continue
+		var distance := global_position.distance_squared_to(plaque.global_position)
+		if distance < nearest_distance:
+			nearest = plaque
+			nearest_distance = distance
+	if nearest == null:
+		return false
+	var panel := _reading_panel()
+	if panel == null:
+		push_warning("阅读框未配置：请把 scenes/ui/reading_ui.tscn 注册为 ReadingUI 自动加载。")
+		return true # 配置缺失时也不把本次阅读误当成祈祷
+	if panel.open_plaque(nearest, self):
+		state = State.READING
+		velocity = Vector2.ZERO
+		if _has_animation(&"idle"):
+			animator.play("idle")
+	return true
+
+
+func _update_reading(delta: float) -> void:
+	var panel := _reading_panel()
+	if panel == null or not panel.is_reading_for(self):
+		state = State.NORMAL
+		return
+	if Input.is_action_just_pressed("pray"):
+		panel.close_plaque(true)
+		state = State.NORMAL
+		velocity.x = 0.0
+		return
+	velocity.x = 0.0
+	if not is_on_floor():
+		velocity.y += gravity * delta
+	move_and_slide()
+	# 地面消失/外部推动导致下落时中止阅读，不在空中锁住玩家。
+	if not is_on_floor():
+		panel.close_plaque(false)
+		state = State.NORMAL
+		airborne = true
+		highest_y = global_position.y
+		_hold_last(&"jump")
+
+
+func _cancel_reading() -> void:
+	var panel := _reading_panel()
+	if panel != null and panel.is_reading_for(self):
+		panel.close_plaque(false)
+
+
+func _exit_tree() -> void:
+	_cancel_reading()

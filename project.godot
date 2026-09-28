@@ -3,6 +3,7 @@ config_version=5
 [application]
 config/name="Church Game - Script Baseline"
 [autoload]
+ReadingUI="*res://scenes/ui/reading_ui.tscn"
 RoomManager="*res://scripts/rooms/room_manager.gd"
 WindowController="*res://scripts/system/window_controller.gd"
 [rendering]

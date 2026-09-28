@@ -1,6 +1,19 @@
 # 破败教堂探索解谜：代码整理版
 
-整理日期：2026-09-22。Godot 4 / GDScript。详细版本变化见 `CHANGELOG.md`。
+整理日期：2026-09-28。Godot 4 / GDScript。详细版本变化见 `CHANGELOG.md`。
+
+## 铭牌阅读更新（2026-09-28）
+
+完整接入步骤见 [铭牌阅读教程](docs/reading-setup.md)。新增场景和素材已配好，复制到正式项目后，将 `scenes/ui/reading_ui.tscn` 注册为 `ReadingUI` 自动加载；把 `scenes/interactions/reading_plaque.tscn` 拖入地图，在检查器填写标题、正文和Clue Id。
+
+- 玩家普通地面状态下Z优先阅读附近铭牌，再按Z关闭；跪姿时Z仍优先起身。
+- READING状态禁止角色移动、跳跃、抓链及镜头上下观察。窗口V键逻辑仍由WindowController管理。
+- 完整内容显示到末尾并主动关闭后登记线索，长文支持滚轮。已读记录跨房间保留，尚未写入磁盘存档。
+- 阅读脚本：`scripts/interactions/reading_plaque.gd`、`scripts/ui/reading_ui.gd`；模板：`scenes/interactions/reading_plaque.tscn`、`scenes/ui/reading_ui.tscn`；素材：`assets/interactions/`、`assets/ui/`。
+- 不需要旧版对话里的手动进出信号或玩家导出Reading UI属性，也不要额外粘贴第二份Z键监听。
+- Godot 4.4.1 编辑器导入及新增 `tests/reading_regression.gd` 已通过（0失败）。本次没有宣称旧综合回归全部通过；旧测试在命令行下存在Autoload名称解析与手动物理步进时序问题。玩家原有移动/攀爬/落地函数保持原逻辑，正式地图仍需接入检查。
+
+测试阅读模块：`godot --headless --path . --script tests/reading_regression.gd`。
 
 这是根据当前对话整理的代码基线，不是从本地项目完整导出的版本。玩家美术、地图、SpriteFrames 等仍使用自己的项目资源。没有凭空加入尚未完成的存档、耐力、圣物或结局系统。
 
